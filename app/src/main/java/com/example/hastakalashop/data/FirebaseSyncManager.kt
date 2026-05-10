@@ -21,7 +21,8 @@ class FirebaseSyncManager {
 
     private val db = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
-    private val storage = FirebaseStorage.getInstance()
+    // CRITICAL FIX: Explicitly force connection to the exact bucket url from console
+    private val storage = FirebaseStorage.getInstance("gs://hasta-kala-1b213.firebasestorage.app")
     private val TAG = "FirebaseSyncManager"
 
     private fun getBaseCollection() = auth.currentUser?.uid?.let { uid ->
