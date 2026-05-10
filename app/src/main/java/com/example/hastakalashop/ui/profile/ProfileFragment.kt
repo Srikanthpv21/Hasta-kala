@@ -125,30 +125,31 @@ class ProfileFragment : Fragment() {
         }
 
         btnLogout.setOnClickListener {
-            // CRITICAL SECURITY FIX: Purge local cache completely to prevent data bleeding between users
-            viewModel.clearAllLocalData()
-            prefs.edit().clear().apply() // Reset all shared preferences too
-
-            // Firebase Sign Out
-            Firebase.auth.signOut()
-
-            // Clear Credential Manager state
-            val credentialManager = CredentialManager.create(requireContext())
             lifecycleScope.launch {
+                // CRITICAL SECURITY FIX: Purge local cache completely to prevent data bleeding between users
+                // We must await completion BEFORE activity is finished and scope is cancelled.
+                viewModel.clearAllLocalData()
+                prefs.edit().clear().apply() // Reset all shared preferences too
+
+                // Firebase Sign Out
+                Firebase.auth.signOut()
+
+                // Clear Credential Manager state
+                val credentialManager = CredentialManager.create(requireContext())
                 try {
                     credentialManager.clearCredentialState(ClearCredentialStateRequest())
                 } catch (e: Exception) {
                     Log.e("ProfileFragment", "Failed to clear credentials: ${e.message}")
                 }
+
+                // Restore flags needed for onboarding state but log out
+                prefs.edit().putBoolean("is_logged_in", false).putBoolean("onboarding_completed", true).apply() 
+
+                val intent = Intent(requireContext(), LoginActivity::class.java)
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                startActivity(intent)
+                requireActivity().finish()
             }
-
-            // is_logged_in should technically be cleared by the edit().clear().apply() but explicitly setting it helps prevent flow bugs
-            prefs.edit().putBoolean("is_logged_in", false).putBoolean("onboarding_completed", true).apply() 
-
-            val intent = Intent(requireContext(), LoginActivity::class.java)
-            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            startActivity(intent)
-            requireActivity().finish()
         }
     }
 }

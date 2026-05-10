@@ -175,22 +175,60 @@ class InventoryRepository(
      * Ensures that previously generated sales/items are retrieved on fresh logins.
      */
     private suspend fun restoreUserDataFromCloud() {
-        // Stage 1: Restore Items
+        // Stage 1: Restore Items (Establish cloud source of truth)
         kotlin.coroutines.suspendCoroutine<Unit> { continuation ->
             syncManager.fetchInventory { remoteItems ->
                 kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                    remoteItems.forEach { itemDao.insertItem(it) }
-                    continuation.resumeWith(Result.success(Unit))
+                    try {
+                        database.withTransaction {
+                            val remoteIds = remoteItems.map { it.id }.toSet()
+                            val localItems = itemDao.getAllItemsList()
+                            
+                            // 1. Prune: Delete local items that no longer exist in cloud
+                            localItems.filterNot { it.id in remoteIds }.forEach { itemDao.deleteItem(it) }
+                            
+                            // 2. Upsert: Write latest cloud versions down to device cache
+                            remoteItems.forEach { remoteItem ->
+                                // CRITICAL SELF-HEALING: If historical cloud data contains poisoned local URIs,
+                                // we sanitize it upon restoration to prevent loading broken internal references.
+                                val sanitizedItem = if (remoteItem.imageUri != null && 
+                                    (remoteItem.imageUri.startsWith("content://") || remoteItem.imageUri.startsWith("file://"))) {
+                                    remoteItem.copy(imageUri = null)
+                                } else {
+                                    remoteItem
+                                }
+                                itemDao.insertItem(sanitizedItem)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("InventoryRepository", "Sync Item Error: ${e.message}")
+                    } finally {
+                        continuation.resumeWith(Result.success(Unit))
+                    }
                 }
             }
         }
         
-        // Stage 2: Restore Sales history
+        // Stage 2: Restore Sales history (Establish cloud source of truth)
         kotlin.coroutines.suspendCoroutine<Unit> { continuation ->
             syncManager.fetchSales { remoteSales ->
                 kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                    remoteSales.forEach { saleDao.insertSale(it) }
-                    continuation.resumeWith(Result.success(Unit))
+                    try {
+                        database.withTransaction {
+                            val remoteIds = remoteSales.map { it.id }.toSet()
+                            val localSales = saleDao.getAllSalesList()
+
+                            // 1. Prune: Delete local entries that no longer exist in cloud
+                            localSales.filterNot { it.id in remoteIds }.forEach { saleDao.deleteSale(it) }
+
+                            // 2. Upsert: Write latest cloud versions down to device cache
+                            remoteSales.forEach { saleDao.insertSale(it) }
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("InventoryRepository", "Sync Sales Error: ${e.message}")
+                    } finally {
+                        continuation.resumeWith(Result.success(Unit))
+                    }
                 }
             }
         }
@@ -202,6 +240,10 @@ class InventoryRepository(
      * THEN pushes any accidental temporary local data up to cloud.
      */
     suspend fun triggerInitialSync() {
+        // CRITICAL SECURITY FIX: Purge old local cache completely BEFORE pulling down new user data.
+        // This is the primary defense against leaking data between multiple accounts on the same device.
+        clearAllLocalData()
+
         // 1. Fetch and hydrate Room cache with stored user data
         restoreUserDataFromCloud()
         

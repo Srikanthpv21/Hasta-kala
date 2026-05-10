@@ -87,10 +87,8 @@ class MainViewModel(private val repository: InventoryRepository) : ViewModel() {
         }
     }
 
-    fun clearAllLocalData() {
-        viewModelScope.launch {
-            repository.clearAllLocalData()
-        }
+    suspend fun clearAllLocalData() {
+        repository.clearAllLocalData()
     }
 
     fun deleteItem(item: Item) {

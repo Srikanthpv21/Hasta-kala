@@ -40,8 +40,18 @@ class FirebaseSyncManager {
 
     fun syncItem(item: Item) {
         val base = getBaseCollection() ?: return
-        base.collection("inventory").document(item.id.toString())
-            .set(item, SetOptions.merge())
+        
+        // CRITICAL SANITY CHECK: Never push a local device "content://" or "file://" URI to cloud.
+        // These URIs only exist locally on this process. Instead, we null it out here,
+        // and let the asynchronous upload process sync the true HTTP url later.
+        val uploadItem = if (item.imageUri != null && (item.imageUri.startsWith("content://") || item.imageUri.startsWith("file://"))) {
+            item.copy(imageUri = null) 
+        } else {
+            item
+        }
+
+        base.collection("inventory").document(uploadItem.id.toString())
+            .set(uploadItem, SetOptions.merge())
             .addOnFailureListener { 
                 Log.e(TAG, "Failed to sync item: ${it.message}")
                 showToast("Item update failed: ${it.message}")
@@ -75,7 +85,10 @@ class FirebaseSyncManager {
     }
 
     fun fetchProfile(onResult: (Map<String, Any>?) -> Unit) {
-        val base = getBaseCollection() ?: return
+        val base = getBaseCollection() ?: run {
+            onResult(null)
+            return
+        }
         base.get()
             .addOnSuccessListener { document ->
                 onResult(document.data)
@@ -88,7 +101,10 @@ class FirebaseSyncManager {
     }
 
     fun fetchInventory(onResult: (List<Item>) -> Unit) {
-        val base = getBaseCollection() ?: return
+        val base = getBaseCollection() ?: run {
+            onResult(emptyList())
+            return
+        }
         base.collection("inventory").get()
             .addOnSuccessListener { snapshot ->
                 val items = mutableListOf<Item>()
@@ -110,7 +126,10 @@ class FirebaseSyncManager {
     }
 
     fun fetchSales(onResult: (List<Sale>) -> Unit) {
-        val base = getBaseCollection() ?: return
+        val base = getBaseCollection() ?: run {
+            onResult(emptyList())
+            return
+        }
         base.collection("sales").get()
             .addOnSuccessListener { snapshot ->
                 val sales = mutableListOf<Sale>()
@@ -171,6 +190,13 @@ class FirebaseSyncManager {
     fun syncAll(items: List<Item>, sales: List<Sale>) {
         val base = getBaseCollection() ?: return
         
+        // CRITICAL STABILITY FIX: FireStore WriteBatch explicitly forbids committing zero operations
+        // and throws an instant IllegalArgumentException. Safeguard against blank payloads.
+        if (items.isEmpty() && sales.isEmpty()) {
+            Log.d(TAG, "Nothing stored in memory, bypassing batch write task.")
+            return
+        }
+
         // Use batch to upload efficiently
         val batch = db.batch()
         

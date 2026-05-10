@@ -205,13 +205,18 @@ class RegisterActivity : AppCompatActivity() {
                             }
                             
                             repository.triggerInitialSync()
+                            
+                            // Fix: Moving intent start inside coroutine guarantees we await sync 
+                            // and don't cancel the scope mid-execution via activity.finish()
+                            startActivity(Intent(this@RegisterActivity, MainActivity::class.java))
+                            finish()
                         } catch (e: Exception) {
                             Log.e(TAG, "Initial sync failed: ${e.localizedMessage}")
+                            // Fallback navigation
+                            startActivity(Intent(this@RegisterActivity, MainActivity::class.java))
+                            finish()
                         }
                     }
-
-                    startActivity(Intent(this, MainActivity::class.java))
-                    finish()
                 } else {
                     Toast.makeText(this, "Firebase Auth failed: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
                 }

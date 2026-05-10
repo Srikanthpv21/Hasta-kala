@@ -22,7 +22,7 @@ data class SaleWithItem(
 
 @Dao
 interface SaleDao {
-    @Insert
+    @Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
     suspend fun insertSale(sale: Sale): Long
 
     @Query("SELECT * FROM sales")
@@ -36,6 +36,9 @@ interface SaleDao {
 
     @Query("SELECT i.name as itemName, i.color as color, SUM(s.quantitySold) as totalSold FROM sales s INNER JOIN items i ON s.itemId = i.id GROUP BY s.itemId ORDER BY totalSold DESC")
     fun getAggregatedSales(): LiveData<List<ItemSalesAggregation>>
+
+    @androidx.room.Delete
+    suspend fun deleteSale(sale: Sale)
 
     @Query("DELETE FROM sales")
     suspend fun deleteAllSales()
