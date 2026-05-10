@@ -128,21 +128,34 @@ class FirebaseSyncManager {
     fun uploadItemImage(itemId: Int, localUri: Uri, onSuccess: (String) -> Unit) {
         val ref = getStorageRef()?.child("inventory")?.child("$itemId.jpg") ?: return
         
-        ref.putFile(localUri)
-            .continueWithTask { task ->
-                if (!task.isSuccessful) {
-                    task.exception?.let { throw it }
+        try {
+            val context = appContext ?: return
+            val inputStream = context.contentResolver.openInputStream(localUri)
+            if (inputStream == null) {
+                showToast("Failed to open local image stream")
+                return
+            }
+
+            ref.putStream(inputStream)
+                .continueWithTask { task ->
+                    inputStream.close() // Clean up stream resources
+                    if (!task.isSuccessful) {
+                        task.exception?.let { throw it }
+                    }
+                    ref.downloadUrl
                 }
-                ref.downloadUrl
-            }
-            .addOnSuccessListener { downloadUri ->
-                onSuccess(downloadUri.toString())
-            }
-            .addOnFailureListener {
-                val msg = "Image upload failed: ${it.message}"
-                Log.e(TAG, msg)
-                showToast(msg)
-            }
+                .addOnSuccessListener { downloadUri ->
+                    onSuccess(downloadUri.toString())
+                }
+                .addOnFailureListener {
+                    val msg = "Image upload failed: ${it.message}"
+                    Log.e(TAG, msg)
+                    showToast(msg)
+                }
+        } catch (e: Exception) {
+            Log.e(TAG, "Stream error: ${e.message}")
+            showToast("Local image processing failed: ${e.message}")
+        }
     }
 
     /**

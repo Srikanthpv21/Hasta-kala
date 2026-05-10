@@ -41,6 +41,7 @@ class InventoryFragment : Fragment() {
     private val binding get() = _binding!!
     private lateinit var viewModel: MainViewModel
     private var currentPhotoUri: Uri? = null
+    private var currentPhotoFile: java.io.File? = null
     private var currentDialogImageView: ImageView? = null
     private var fullItemList = listOf<Item>()
     private var currentQuery = ""
@@ -170,6 +171,7 @@ class InventoryFragment : Fragment() {
 
     private fun showCreateItemDialog() {
         currentPhotoUri = null
+        currentPhotoFile = null
         val dialogView = layoutInflater.inflate(R.layout.dialog_add_item, null)
         val editName     = dialogView.findViewById<EditText>(R.id.edit_item_name)
         val editCategory = dialogView.findViewById<AutoCompleteTextView>(R.id.edit_item_category)
@@ -186,7 +188,8 @@ class InventoryFragment : Fragment() {
         editCategory.setAdapter(categoryAdapter)
 
         btnTakePhoto.setOnClickListener {
-            val photoFile = File(requireContext().cacheDir, "item_photo_${System.currentTimeMillis()}.jpg")
+            val photoFile = java.io.File(requireContext().cacheDir, "item_photo_${System.currentTimeMillis()}.jpg")
+            currentPhotoFile = photoFile
             val uri = FileProvider.getUriForFile(requireContext(), "${requireContext().packageName}.fileprovider", photoFile)
             currentPhotoUri = uri
             currentDialogImageView = imagePreview
@@ -220,7 +223,7 @@ class InventoryFragment : Fragment() {
                             price = price, 
                             initialStock = stock, 
                             currentStock = stock, 
-                            imageUri = currentPhotoUri?.toString()
+                            imageUri = currentPhotoFile?.let { Uri.fromFile(it).toString() } ?: currentPhotoUri?.toString()
                         )
                         viewModel.insertItem(newItem)
                         Toast.makeText(requireContext(), "Item created!", Toast.LENGTH_SHORT).show()
@@ -289,7 +292,8 @@ class InventoryFragment : Fragment() {
     private fun copyUriToCache(uri: Uri): Uri? {
         return try {
             val inputStream = requireContext().contentResolver.openInputStream(uri) ?: return null
-            val photoFile = File(requireContext().cacheDir, "cached_upload_${System.currentTimeMillis()}.jpg")
+            val photoFile = java.io.File(requireContext().cacheDir, "cached_upload_${System.currentTimeMillis()}.jpg")
+            currentPhotoFile = photoFile
             val outputStream = FileOutputStream(photoFile)
             inputStream.copyTo(outputStream)
             inputStream.close()
