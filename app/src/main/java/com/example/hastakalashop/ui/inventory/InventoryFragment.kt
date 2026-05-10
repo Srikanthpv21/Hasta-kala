@@ -32,6 +32,7 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.FileOutputStream
 
 class InventoryFragment : Fragment() {
 
@@ -51,6 +52,14 @@ class InventoryFragment : Fragment() {
             }
         } else {
             currentPhotoUri = null
+        }
+    }
+
+    private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        uri?.let {
+            val localCachedUri = copyUriToCache(it)
+            currentPhotoUri = localCachedUri
+            currentDialogImageView?.setImageURI(localCachedUri)
         }
     }
 
@@ -168,6 +177,7 @@ class InventoryFragment : Fragment() {
         val editStock    = dialogView.findViewById<EditText>(R.id.edit_item_stock)
         val imagePreview = dialogView.findViewById<ImageView>(R.id.image_item_preview)
         val btnTakePhoto = dialogView.findViewById<Button>(R.id.btn_take_photo)
+        val btnPickGallery = dialogView.findViewById<Button>(R.id.btn_pick_gallery)
 
         // Set up categories adapter
         val categories = fullItemList.map { it.category }.distinct().filter { it.isNotEmpty() }
@@ -180,6 +190,11 @@ class InventoryFragment : Fragment() {
             currentPhotoUri = uri
             currentDialogImageView = imagePreview
             takePictureLauncher.launch(uri)
+        }
+
+        btnPickGallery.setOnClickListener {
+            currentDialogImageView = imagePreview
+            pickImageLauncher.launch("image/*")
         }
 
         AlertDialog.Builder(requireContext())
@@ -269,6 +284,20 @@ class InventoryFragment : Fragment() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+    private fun copyUriToCache(uri: Uri): Uri? {
+        return try {
+            val inputStream = requireContext().contentResolver.openInputStream(uri) ?: return null
+            val photoFile = File(requireContext().cacheDir, "cached_upload_${System.currentTimeMillis()}.jpg")
+            val outputStream = FileOutputStream(photoFile)
+            inputStream.copyTo(outputStream)
+            inputStream.close()
+            outputStream.close()
+            FileProvider.getUriForFile(requireContext(), "${requireContext().packageName}.fileprovider", photoFile)
+        } catch (e: Exception) {
+            Log.e("InventoryFragment", "Failed to cache selected image: ${e.message}")
+            null
+        }
     }
 }
 
