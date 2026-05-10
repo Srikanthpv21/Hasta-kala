@@ -85,7 +85,15 @@ class FirebaseSyncManager {
         val base = getBaseCollection() ?: return
         base.collection("inventory").get()
             .addOnSuccessListener { snapshot ->
-                val items = snapshot.toObjects(Item::class.java)
+                val items = mutableListOf<Item>()
+                for (doc in snapshot.documents) {
+                    try {
+                        val item = doc.toObject(Item::class.java)
+                        if (item != null) items.add(item)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Skipping corrupt item document ${doc.id}: ${e.message}")
+                    }
+                }
                 onResult(items)
             }
             .addOnFailureListener {
@@ -99,7 +107,15 @@ class FirebaseSyncManager {
         val base = getBaseCollection() ?: return
         base.collection("sales").get()
             .addOnSuccessListener { snapshot ->
-                val sales = snapshot.toObjects(Sale::class.java)
+                val sales = mutableListOf<Sale>()
+                for (doc in snapshot.documents) {
+                    try {
+                        val sale = doc.toObject(Sale::class.java)
+                        if (sale != null) sales.add(sale)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Skipping corrupt sale document ${doc.id}: ${e.message}")
+                    }
+                }
                 onResult(sales)
             }
             .addOnFailureListener {
