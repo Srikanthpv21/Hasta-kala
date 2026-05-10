@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Hasta-Kala Shop</string>
+    <string name="title_dashboard">Best Seller</string>
+    <string name="title_quick_bill">Quick Bill</string>
+    <string name="title_stock_alert">Stock Alert</string>
+    <string name="title_income_log">Income Log</string>
+    <string name="title_inventory">Inventory</string>
+</resources>
