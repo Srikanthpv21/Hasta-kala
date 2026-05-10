@@ -21,8 +21,13 @@ class FirebaseSyncManager {
 
     private val db = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
-    // CRITICAL FIX: Explicitly force connection to the exact bucket url from console
-    private val storage = FirebaseStorage.getInstance("gs://hasta-kala-1b213.firebasestorage.app")
+    
+    // DEFINITIVE MASTER FIX: Dynamically fetch the bucket address from internal configuration 
+    // but prepend "gs://" explicitly to force proper SDK initialization without hardcoded strings in Git.
+    private val storage = com.google.firebase.FirebaseApp.getInstance().options.storageBucket?.let { 
+        FirebaseStorage.getInstance("gs://$it")
+    } ?: FirebaseStorage.getInstance()
+    
     private val TAG = "FirebaseSyncManager"
 
     private fun getBaseCollection() = auth.currentUser?.uid?.let { uid ->
